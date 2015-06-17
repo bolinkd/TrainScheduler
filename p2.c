@@ -8,12 +8,11 @@
 struct train{
 	char priority;
 	char direction;
-	char state;
-	//N=new, R=Ready, L=Loading, W=Waiting, C=Crossing, D=Done
+	char directionName[5];
+	char state;    //N=new, R=Ready, L=Loading, W=Waiting, C=Crossing, D=Done
 	int loadTime;
-	int waitTime;
+	int crossTime;
 	int trainid;
-	pthread_mutex_t startMutex;
 };
 
 
@@ -44,8 +43,7 @@ struct Master *Head = NULL;
 
 pthread_mutex_t mainTrack;
 pthread_cond_t startCond;
-pthread_attr_t attr;
-
+pthread_mutex_t startMutex;
 int countComplete(struct train Trains[],int numTrains){
 	int complete = 0;
 	int i;
@@ -59,64 +57,39 @@ int countComplete(struct train Trains[],int numTrains){
 
 void *CreateTrain(void *tempTrain){
 	struct train * Train = tempTrain;
-	sleep(5);
 	Train->state = 'R';
-	pthread_cond_wait(&startCond, &Train->startMutex);
-	pthread_mutex_unlock(&Train->startMutex);
+	pthread_cond_wait(&startCond, &startMutex);
+	pthread_mutex_unlock(&startMutex);
 	Train->state = 'L';
 	sleep(Train->loadTime);
+	printf("Train %2d is ready to go %4s\n",Train->trainid,Train->directionName);
+	fflush(stdout);
 	while (pthread_mutex_lock(&mainTrack) != 0){
 		// DO NOTHING
 		Train->state = 'W';
 	}
+	printf("Train %2d is ON the main track going %4s\n",Train->trainid,Train->directionName);
 	Train->state = 'C';
-	sleep(Train->waitTime);
+	sleep(Train->crossTime);
 	Train->state = 'D';
+	printf("Train %2d is OFF the main track after going %4s\n",Train->trainid,Train->directionName);
 	pthread_mutex_unlock(&mainTrack);
 	pthread_exit(NULL);
 }
 
-void printTrain(struct train toPrint, int trainid){
-	if(toPrint.state == 'N'){
-		printf("Train %i is created\n",trainid);
-	}else if(toPrint.state == 'R'){
-		printf("Train %i is headed %c with priority %c after loading for %i and travels for %i\n",trainid,toPrint.direction,toPrint.priority,toPrint.loadTime,toPrint.waitTime);
-	}else if(toPrint.state == 'L'){
-		printf("Train %i is loading for %i and ready to go %c with priority %c and travels for %i\n",trainid,toPrint.loadTime,toPrint.direction,toPrint.priority,toPrint.waitTime);
-	}else if(toPrint.state == 'C'){
-		printf("Train %i is crossing the track for %i\n",trainid,toPrint.waitTime);
-	}else if(toPrint.state == 'D'){
-		printf("Train %i has crossed the track\n",trainid);
-	}else if(toPrint.state == 'W'){
-		printf("Train %i is waiting to cross the track\n",trainid);	
-	}else{
-		printf("Train %i has state %c and is lost\n",trainid,toPrint.state);
-	}
-	fflush(stdout);
-	
-}
-
-void printTrains(struct train Trains[], int numTrains){
-	int i;
-	printf("------------------------------------------------------------------------\n");
-	for(i=0;i<numTrains;i++){
-		printTrain(Trains[i], i);
-	}
-	printf("------------------------------------------------------------------------\n");
-	fflush(stdout);
-}
 
 void WaitCompletion(struct train Trains[], int numTrains){
 	int i=0;
 	while (i != numTrains){
-		if(Trains[i].state = 'R')
+		if(Trains[i].state == 'R'){
 			i++;
+		}
 	}
-	printf("All trains ready to go\n");
-	sleep(5);
 	pthread_cond_broadcast(&startCond);
+
 	while (countComplete(Trains,numTrains) != numTrains){
-		printTrains(Trains,numTrains);
+		//Do Nothing
+		//printf("%c %c %c\n",Trains[0].state,Trains[1].state,Trains[2].state);
 		sleep(2);
 	}
 	return;
@@ -139,27 +112,24 @@ int main(int argc, char *argv[]){
 
 	struct train Trains[numTrains];
 	pthread_t pthreads[numTrains];
-
-
-	//init attr
-	pthread_attr_init(&attr);
 	
 	//init cond
 	pthread_cond_init(&startCond,NULL);
 	
 	//init mutex
 	pthread_mutex_init(&mainTrack, NULL);	
-	
+	pthread_mutex_init(&startMutex,NULL);
+	pthread_mutex_lock(&startMutex);
 
 
 	//Create All Trains
 	for(i=0;i<numTrains;i++){
 		char fileDirection;
 		int fileLoadTime;
-		int fileWaitTime;
+		int fileCrossTime;
 		char filePriority;
 		struct train *current = &Trains[i];
-		fscanf(fp,"%c:%i,%i\n", &fileDirection,&fileWaitTime,&fileLoadTime);
+		fscanf(fp,"%c:%i,%i\n", &fileDirection,&fileCrossTime,&fileLoadTime);
 		if(fileDirection >= 65 && fileDirection <= 90){
 			filePriority = 'H';
 			fileDirection = fileDirection + 'a' - 'A';
@@ -168,8 +138,13 @@ int main(int argc, char *argv[]){
 		}
 		Trains[i].priority = filePriority;
 		Trains[i].direction = fileDirection;
+		if(Trains[i].direction == 'E'){
+			strcpy(Trains[i].directionName, "East");
+		}else{
+			strcpy(Trains[i].directionName, "West");
+		} 
 		Trains[i].loadTime = fileLoadTime;
-		Trains[i].waitTime = fileWaitTime;
+		Trains[i].crossTime = fileCrossTime;
 		Trains[i].trainid = i;
 		Trains[i].state = 'N';
 		int rc = pthread_create(&pthreads[i], NULL, CreateTrain, (void *)current);
@@ -179,15 +154,12 @@ int main(int argc, char *argv[]){
     		}
 	}
 	
-	printTrains(Trains,numTrains);
 	WaitCompletion(Trains,numTrains);
-	printTrains(Trains,numTrains);
 	for(i=0;i<numTrains;i++){
 		pthread_join(pthreads[i],&Status);
 	}
 	fflush(stdout);
 	pthread_mutex_destroy(&mainTrack);
-	pthread_attr_destroy(&attr);
 	pthread_cond_destroy(&startCond);
 	return (0);
 }
