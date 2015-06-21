@@ -308,6 +308,28 @@ void WaitCompletion(struct train Trains[], int numTrains){
 			// Compare to see if any queued trains should be before waiting train
 			if(waitingTrain->priority == 'L'){
 				//check the high priority queue
+
+				if(lastDirection == 'E'){
+					//SELECT west Train
+					if(waitingTrain->direction == 'E'){
+						if(MasterHead->HW != NULL){
+							selectedTrain = MasterHead->HW->Train;
+						}
+					}else{
+						if(MasterHead->HW != NULL){
+							selectedTrain = MasterHead->HW->Train;
+						}else if(Master->HE != NULL){
+							selectedTrain = MasterHead->HE->Train;
+						}
+					}
+									
+				}else{
+					//SELECT east Train
+
+				}
+
+
+
 				if(MasterHead->HE != NULL){
 					selectedTrain = MasterHead->HE->Train;
 				}
