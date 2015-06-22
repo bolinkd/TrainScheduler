@@ -43,11 +43,12 @@ struct Master{
 * Initialize 
 * 
 *************/
-struct Master *MasterHead;
+struct Master *Master;
 struct Master *MasterTail;
 
 pthread_mutex_t mainTrack;
 pthread_mutex_t moveTrainsMutex;
+pthread_mutex_t trainMovedMutex;
 pthread_mutex_t masterList;
 
 pthread_cond_t trainMoved;
@@ -62,39 +63,96 @@ void pushTrain(struct train *Train){
 	char direction = Train->direction;
 	struct Node * newNode = malloc(sizeof(struct Node));
 	newNode->Train = Train;
+	int inserted = 0;
 	if(priority == 'H' && direction == 'E'){
 		if(MasterTail->HE == NULL){
-			MasterHead->HE = (struct Node *)newNode;
+			Master->HE = (struct Node *)newNode;
 			MasterTail->HE = (struct Node *)newNode;
 		}else{
 			struct Node * temp = MasterTail->HE;
+			while(temp->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid > newNode->Train->trainid){
+					if(temp->prev != NULL){
+						temp = temp->prev;
+					}else{
+						newNode->next = temp;
+						Master->HE = newNode;
+						temp->prev = newNode;		
+					}
+				}else{
+					MasterTail->HE = (struct Node *)newNode;
+					break;
+				}
+			}
 			temp->next = (struct Node *)newNode;
 			MasterTail->HE = (struct Node *)newNode; 
 		}
 	}else if(priority == 'H' && direction == 'W'){
 		if(MasterTail->HW == NULL){
-			MasterHead->HW = (struct Node *)newNode;
+			Master->HW = (struct Node *)newNode;
 			MasterTail->HW = (struct Node *)newNode;
 		}else{
 			struct Node * temp = MasterTail->HW;
+			while(temp->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid > newNode->Train->trainid){
+					if(temp->prev != NULL){
+						temp = temp->prev;
+					}else{
+						Master->HW = newNode;
+						temp->prev = newNode;
+						newNode->next = temp;
+					}
+				}else{
+					MasterTail->HW = (struct Node *)newNode;
+					break;
+				}
+			}
 			temp->next = (struct Node *)newNode;
 			MasterTail->HW = (struct Node *)newNode; 
 		}
 	}else if(priority == 'L' && direction == 'E'){
 		if(MasterTail->LE == NULL){
-			MasterHead->LE = (struct Node *)newNode;
+			Master->LE = (struct Node *)newNode;
 			MasterTail->LE = (struct Node *)newNode;
 		}else{
 			struct Node * temp = MasterTail->LE;
-			temp->next = (struct Node *)newNode;
-			MasterTail->LE = (struct Node *)newNode; 
+			while(temp->Train->loadTime == newNode->Train->loadTime && inserted == 0){
+				if(temp->Train->trainid > newNode->Train->trainid){
+					if(temp->prev != NULL){
+						temp = temp->prev;
+					}else{
+						newNode->next = temp;
+						Master->LE = newNode;
+						temp->prev = newNode;
+						inserted = 1;
+					}
+				}else{
+					MasterTail->LE = (struct Node *)newNode;
+					temp->next = (struct Node *)newNode;
+					inserted = 1;
+				}
+			}
 		}
 	}else if(priority == 'L' && direction == 'W'){
 		if(MasterTail->LW == NULL){
-			MasterHead->LW = (struct Node *)newNode;
+			Master->LW = (struct Node *)newNode;
 			MasterTail->LW = (struct Node *)newNode;
 		}else{
 			struct Node * temp = MasterTail->LW;
+			while(temp->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid > newNode->Train->trainid){
+					if(temp->prev != NULL){
+						temp = temp->prev;
+					}else{
+						Master->LW = newNode;
+						temp->prev = newNode;
+						newNode->next = temp;
+					}
+				}else{
+					MasterTail->LW = (struct Node *)newNode;
+					break;
+				}
+			}
 			temp->next = (struct Node *)newNode;
 			MasterTail->LW = (struct Node *)newNode; 
 		}
@@ -108,40 +166,40 @@ void popTrain(struct train *Train){
 	char direction = Train->direction;
 	struct Node * tofree = NULL;
 	if(priority == 'H' && direction == 'E'){
-		if(MasterHead->HE->next == NULL){
-			tofree = (struct Node *)MasterHead->HE;
-			MasterHead->HE = NULL;
+		if(Master->HE->next == NULL){
+			tofree = (struct Node *)Master->HE;
+			Master->HE = NULL;
 			MasterTail->HE = NULL;
 		}else{
-			tofree = (struct Node *)MasterHead->HE;
-			MasterHead->HE = (struct Node *)MasterHead->HE->next; 
+			tofree = (struct Node *)Master->HE;
+			Master->HE = (struct Node *)Master->HE->next; 
 		}
 	}else if(priority == 'H' && direction == 'W'){
-		if(MasterHead->HW->next == NULL){
-			tofree = (struct Node *)MasterHead->HE;
-			MasterHead->HW = NULL;
+		if(Master->HW->next == NULL){
+			tofree = (struct Node *)Master->HE;
+			Master->HW = NULL;
 			MasterTail->HW = NULL;
 		}else{
-			tofree = (struct Node *)MasterHead->HW;
-			MasterHead->HW = (struct Node *)MasterHead->HW->next; 
+			tofree = (struct Node *)Master->HW;
+			Master->HW = (struct Node *)Master->HW->next; 
 		}
 	}else if(priority == 'L' && direction == 'E'){
-		if(MasterHead->LE->next == NULL){
-			tofree = MasterHead->LE;
-			MasterHead->LE = NULL;
+		if(Master->LE->next == NULL){
+			tofree = Master->LE;
+			Master->LE = NULL;
 			MasterTail->LE = NULL;
 		}else{
-			tofree = MasterHead->LE;
-			MasterHead->LE = MasterHead->LE->next; 
+			tofree = Master->LE;
+			Master->LE = Master->LE->next; 
 		}
 	}else if(priority == 'L' && direction == 'W'){
-		if(MasterHead->LW->next == NULL){
-			tofree = (struct Node *)MasterHead->LW;
-			MasterHead->LW = NULL;
+		if(Master->LW->next == NULL){
+			tofree = (struct Node *)Master->LW;
+			Master->LW = NULL;
 			MasterTail->LW = NULL;
 		}else{
-			tofree = (struct Node *)MasterHead->LW;
-			MasterHead->LW = (struct Node *)MasterHead->LW->next; 
+			tofree = (struct Node *)Master->LW;
+			Master->LW = (struct Node *)Master->LW->next; 
 		}
 	}else{
 		printf("ERROR");
@@ -172,7 +230,7 @@ void *CreateTrain(void *tempTrain){
 	}
 	pushTrain(Train);
 	pthread_mutex_unlock(&masterList);
-	//printf("Train %2d is ready to go %4s\n",Train->trainid,Train->directionName);
+	printf("Train %2d is ready to go %4s\n",Train->trainid,Train->directionName);
 	fflush(stdout);
 	Train->state = 'W';
 	int lock;
@@ -202,7 +260,7 @@ void *CreateTrain(void *tempTrain){
 
 	}
 	
-	//printf("Train %2d is ON the main track going %4s\n",Train->trainid,Train->directionName);
+	printf("Train %2d is ON the main track going %4s\n",Train->trainid,Train->directionName);
 	usleep(Train->crossTime*CONVERT);
 	pthread_cond_signal(&trainMoved);
 	Train->state = 'D';
@@ -216,42 +274,75 @@ void *CreateTrain(void *tempTrain){
 }
 
 void setReadyTrain(struct train * Train){
-	if(MasterHead->HE != NULL){
-		if(MasterHead->HE->Train->trainid == Train->trainid){
+	if(Master->HE != NULL){
+		if(Master->HE->Train->trainid == Train->trainid){
 			//set to waiting
-			MasterHead->HE->Train->state = 'R';
+			Master->HE->Train->state = 'R';
 		}else{
 			//set to not waiting
-			MasterHead->HE->Train->state = 'W';
+			Master->HE->Train->state = 'W';
 		}
 	}
-	if(MasterHead->HW != NULL){
-		if(MasterHead->HW->Train->trainid == Train->trainid){
+	if(Master->HW != NULL){
+		if(Master->HW->Train->trainid == Train->trainid){
 			//set to waiting
-			MasterHead->HW->Train->state = 'R';
+			Master->HW->Train->state = 'R';
 		}else{
 			//set to not waiting
-			MasterHead->HW->Train->state = 'W';
+			Master->HW->Train->state = 'W';
 		}
 	}
-	if(MasterHead->LE != NULL){
-		if(MasterHead->LE->Train->trainid == Train->trainid){
+	if(Master->LE != NULL){
+		if(Master->LE->Train->trainid == Train->trainid){
 			//set to waiting
-			MasterHead->LE->Train->state = 'R';
+			Master->LE->Train->state = 'R';
 		}else{
 			//set to not waiting
-			MasterHead->LE->Train->state = 'W';
+			Master->LE->Train->state = 'W';
 		}
 	}
-	if(MasterHead->LW != NULL){
-		if(MasterHead->LW->Train->trainid == Train->trainid){
+	if(Master->LW != NULL){
+		if(Master->LW->Train->trainid == Train->trainid){
 			//set to waiting
-			MasterHead->LW->Train->state = 'R';
+			Master->LW->Train->state = 'R';
 		}else{
 			//set to not waiting
-			MasterHead->LW->Train->state = 'W';
+			Master->LW->Train->state = 'W';
 		}
 	}
+}
+
+void printList(){
+	struct Node * temp = Master->HE;
+	fprintf(stderr,"------------------------------------------\n");
+	fprintf(stderr,"HE: ");
+	while(temp != NULL){
+		fprintf(stderr,"%i ",temp->Train->trainid);
+		temp = (struct Node *)temp->next;
+	}
+	fprintf(stderr,"\n");
+	temp = Master->HW;
+	fprintf(stderr,"HW: ");
+	while(temp != NULL){
+		fprintf(stderr,"%i ",temp->Train->trainid);
+		temp = (struct Node *)temp->next;
+	}
+	fprintf(stderr,"\n");
+	temp = Master->LE;
+	fprintf(stderr,"LE: ");
+	while(temp != NULL){
+		fprintf(stderr,"%i ",temp->Train->trainid);
+		temp = (struct Node *)temp->next;
+	}
+	fprintf(stderr,"\n");
+	temp = Master->LW;
+	fprintf(stderr,"LW: ");
+	while(temp != NULL){
+		fprintf(stderr,"%i ",temp->Train->trainid);
+		temp = (struct Node *)temp->next;
+	}
+	fprintf(stderr,"\n");
+	fprintf(stderr,"------------------------------------------\n");
 }
 
 void WaitCompletion(struct train Trains[], int numTrains){
@@ -263,14 +354,15 @@ void WaitCompletion(struct train Trains[], int numTrains){
 		//printf("COMPLETE =  %i\n",i);
 		//Do Nothing
 		//sleep(2);
-		//for(i=0;i<numTrains;i++){
-		//	printf("%c ",Trains[i].state);
-		//}
-		//printf("\n");
-		pthread_cond_wait(&trainMoved,&moveTrainsMutex);
+		/*for(i=0;i<numTrains;i++){
+			fprintf(stderr,"%c ",Trains[i].state);
+		}
+		fprintf(stderr,"\n");*/
+		pthread_cond_wait(&trainMoved,&trainMovedMutex);
 		//if(countComplete(Trains,numTrains) == numTrains){
 		//	break;
 		//}
+		//printList();
 		while (pthread_mutex_lock(&masterList) != 0){
 			//wait
 		}
@@ -283,25 +375,25 @@ void WaitCompletion(struct train Trains[], int numTrains){
 		if(waitingTrain == NULL){
 			if(lastDirection == 'W'){
 				//SELECT TRAIN FROM EAST
-				if(MasterHead->HE != NULL){
-					selectedTrain = MasterHead->HE->Train;
-				}else if(MasterHead->HW != NULL){
-					selectedTrain = MasterHead->HW->Train;
-				}else if(MasterHead->LE != NULL){
-					selectedTrain = MasterHead->LE->Train;
-				}else if(MasterHead->LW != NULL){
-					selectedTrain = MasterHead->LW->Train;
+				if(Master->HE != NULL){
+					selectedTrain = Master->HE->Train;
+				}else if(Master->HW != NULL){
+					selectedTrain = Master->HW->Train;
+				}else if(Master->LE != NULL){
+					selectedTrain = Master->LE->Train;
+				}else if(Master->LW != NULL){
+					selectedTrain = Master->LW->Train;
 				}
 			}else{
 				//SELECT TRAIN FROM WEST
-				if(MasterHead->HW != NULL){
-					selectedTrain = MasterHead->HW->Train;
-				}else if(MasterHead->HE != NULL){
-					selectedTrain = MasterHead->HE->Train;
-				}else if(MasterHead->LW != NULL){
-					selectedTrain = MasterHead->LW->Train;
-				}else if(MasterHead->LE != NULL){
-					selectedTrain = MasterHead->LE->Train;
+				if(Master->HW != NULL){
+					selectedTrain = Master->HW->Train;
+				}else if(Master->HE != NULL){
+					selectedTrain = Master->HE->Train;
+				}else if(Master->LW != NULL){
+					selectedTrain = Master->LW->Train;
+				}else if(Master->LE != NULL){
+					selectedTrain = Master->LE->Train;
 				}
 			}
 		}else{
@@ -312,39 +404,50 @@ void WaitCompletion(struct train Trains[], int numTrains){
 				if(lastDirection == 'E'){
 					//SELECT west Train
 					if(waitingTrain->direction == 'E'){
-						if(MasterHead->HW != NULL){
-							selectedTrain = MasterHead->HW->Train;
+						if(Master->LW != NULL){
+							selectedTrain = Master->LW->Train;
+						}
+						if(Master->HW != NULL){
+							selectedTrain = Master->HW->Train;
+						}else if(Master->HE != NULL){
+							selectedTrain = Master->HE->Train;
 						}
 					}else{
-						if(MasterHead->HW != NULL){
-							selectedTrain = MasterHead->HW->Train;
+						if(Master->HW != NULL){
+							selectedTrain = Master->HW->Train;
 						}else if(Master->HE != NULL){
-							selectedTrain = MasterHead->HE->Train;
+							selectedTrain = Master->HE->Train;
 						}
 					}
 									
 				}else{
 					//SELECT east Train
-
-				}
-
-
-
-				if(MasterHead->HE != NULL){
-					selectedTrain = MasterHead->HE->Train;
-				}
-				if(MasterHead->HW != NULL){
-					selectedTrain = MasterHead->HW->Train;
+					if(waitingTrain->direction == 'W'){
+						if(Master->LE != NULL){
+							selectedTrain = Master->LE->Train;
+						}
+						if(Master->HE != NULL){
+							selectedTrain = Master->HE->Train;
+						}else if(Master->HW != NULL){
+							selectedTrain = Master->HW->Train;
+						}
+					}else{
+						if(Master->HE != NULL){
+							selectedTrain = Master->HE->Train;
+						}else if(Master->HW != NULL){
+							selectedTrain = Master->HW->Train;
+						}
+					}
 				}
 			}else{
 				if(waitingTrain->direction == 'E' && lastDirection == 'E'){
-					if(MasterHead->HW != NULL){
-						selectedTrain = MasterHead->HW->Train;
+					if(Master->HW != NULL){
+						selectedTrain = Master->HW->Train;
 					}
 				}
 				if(waitingTrain->direction == 'W' && lastDirection == 'W'){
-					if(MasterHead->HE != NULL){
-						selectedTrain = MasterHead->HE->Train;
+					if(Master->HE != NULL){
+						selectedTrain = Master->HE->Train;
 					}
 				}
 			}
@@ -379,13 +482,15 @@ int main(int argc, char *argv[]){
 	pthread_t pthreads[numTrains];
 	
 
-	MasterHead = malloc(sizeof(struct Node)*4);
+	Master = malloc(sizeof(struct Node)*4);
 	MasterTail = malloc(sizeof(struct Node)*4);
 	//init mutex
 	pthread_mutex_init(&mainTrack, NULL);
 	pthread_mutex_init(&masterList, NULL);	
 	pthread_mutex_init(&moveTrainsMutex, NULL);
+	pthread_mutex_init(&trainMovedMutex, NULL);
 
+	pthread_mutex_lock(&trainMovedMutex);
 	pthread_mutex_lock(&moveTrainsMutex);
 
 	//init barrier
@@ -449,6 +554,6 @@ int main(int argc, char *argv[]){
 	pthread_barrier_destroy(&startBarrier);
 	pthread_barrier_destroy(&endBarrier);
 
-	free(MasterHead);
+	free(Master);
 	return (0);
 }
