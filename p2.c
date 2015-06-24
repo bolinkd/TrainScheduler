@@ -20,6 +20,8 @@ struct train{
 struct timespec start,curr;
 
 
+void printList();
+
 
 /*************
 * Struct to hold Processes
@@ -64,97 +66,150 @@ void pushTrain(struct train *Train){
 	struct Node * newNode = malloc(sizeof(struct Node));
 	newNode->Train = Train;
 	int inserted = 0;
+	struct Node * temp = NULL;
 	if(priority == 'H' && direction == 'E'){
-		if(MasterTail->HE == NULL){
-			Master->HE = (struct Node *)newNode;
-			MasterTail->HE = (struct Node *)newNode;
-		}else{
-			struct Node * temp = MasterTail->HE;
-			while(temp->Train->loadTime == newNode->Train->loadTime){
-				if(temp->Train->trainid > newNode->Train->trainid){
-					if(temp->prev != NULL){
-						temp = temp->prev;
-					}else{
-						newNode->next = temp;
-						Master->HE = newNode;
-						temp->prev = newNode;		
-					}
-				}else{
-					MasterTail->HE = (struct Node *)newNode;
-					break;
-				}
-			}
-			temp->next = (struct Node *)newNode;
-			MasterTail->HE = (struct Node *)newNode; 
+		if(Master->HE == NULL){
+			Master->HE = newNode;
+			MasterTail->HE = newNode;
+			inserted = 1;
 		}
-	}else if(priority == 'H' && direction == 'W'){
-		if(MasterTail->HW == NULL){
-			Master->HW = (struct Node *)newNode;
-			MasterTail->HW = (struct Node *)newNode;
-		}else{
-			struct Node * temp = MasterTail->HW;
-			while(temp->Train->loadTime == newNode->Train->loadTime){
-				if(temp->Train->trainid > newNode->Train->trainid){
-					if(temp->prev != NULL){
-						temp = temp->prev;
-					}else{
-						Master->HW = newNode;
-						temp->prev = newNode;
-						newNode->next = temp;
-					}
+		temp = Master->HE;	
+		while(temp->next != NULL && inserted == 0){
+			if(temp->next->Train->loadTime < newNode->Train->loadTime){
+				temp = temp->next;
+			}else if(temp->next->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid < newNode->Train->trainid){
+					temp = temp->next;
 				}else{
-					MasterTail->HW = (struct Node *)newNode;
-					break;
-				}
-			}
-			temp->next = (struct Node *)newNode;
-			MasterTail->HW = (struct Node *)newNode; 
-		}
-	}else if(priority == 'L' && direction == 'E'){
-		if(MasterTail->LE == NULL){
-			Master->LE = (struct Node *)newNode;
-			MasterTail->LE = (struct Node *)newNode;
-		}else{
-			struct Node * temp = MasterTail->LE;
-			while(temp->Train->loadTime == newNode->Train->loadTime && inserted == 0){
-				if(temp->Train->trainid > newNode->Train->trainid){
-					if(temp->prev != NULL){
-						temp = temp->prev;
-					}else{
-						newNode->next = temp;
-						Master->LE = newNode;
-						temp->prev = newNode;
-						inserted = 1;
-					}
-				}else{
-					MasterTail->LE = (struct Node *)newNode;
-					temp->next = (struct Node *)newNode;
+					//insert infront
+					newNode->next = temp->next;
+					newNode->prev = temp;
+					temp->next->prev = newNode;
+					temp->next = newNode;
 					inserted = 1;
 				}
+			}else{
+				//insert infront
+				newNode->next = temp->next;
+				newNode->prev = temp;
+				temp->next->prev = newNode;
+				temp->next = newNode;
+				inserted = 1;
+			}
+		}	
+		if(inserted == 0){
+			//insert at tail
+			temp->next = newNode;
+			MasterTail->HE = newNode;
+			newNode->prev = temp;
+		}
+	}else if(priority == 'H' && direction == 'W'){
+		if(Master->HW == NULL){
+			Master->HW = newNode;
+			MasterTail->HW = newNode;
+			inserted = 1;
+		}
+		temp = Master->HW;	
+		while(temp->next != NULL && inserted == 0){
+			if(temp->next->Train->loadTime < newNode->Train->loadTime){
+				temp = temp->next;
+			}else if(temp->next->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid < newNode->Train->trainid){
+					temp = temp->next;
+				}else{
+					//insert infront
+					newNode->next = temp->next;
+					newNode->prev = temp;
+					temp->next->prev = newNode;
+					temp->next = newNode;
+					inserted = 1;
+				}
+			}else{
+				//insert infront
+				newNode->next = temp->next;
+				newNode->prev = temp;
+				temp->next->prev = newNode;
+				temp->next = newNode;
+				inserted = 1;
 			}
 		}
-	}else if(priority == 'L' && direction == 'W'){
-		if(MasterTail->LW == NULL){
-			Master->LW = (struct Node *)newNode;
-			MasterTail->LW = (struct Node *)newNode;
-		}else{
-			struct Node * temp = MasterTail->LW;
-			while(temp->Train->loadTime == newNode->Train->loadTime){
-				if(temp->Train->trainid > newNode->Train->trainid){
-					if(temp->prev != NULL){
-						temp = temp->prev;
-					}else{
-						Master->LW = newNode;
-						temp->prev = newNode;
-						newNode->next = temp;
-					}
+		if(inserted == 0){
+			//insert at tail;
+			temp->next = newNode;
+			MasterTail->HW = newNode;
+			newNode->prev = temp;
+		}
+	}else if(priority == 'L' && direction == 'E'){
+		if(Master->LE == NULL){
+			Master->LE = newNode;
+			MasterTail->LE = newNode;
+			inserted = 1;
+		}
+		temp = Master->LE;	
+		while(temp->next != NULL && inserted == 0){
+			if(temp->next->Train->loadTime < newNode->Train->loadTime){
+				temp = temp->next;
+			}else if(temp->next->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid < newNode->Train->trainid){
+					temp = temp->next;
 				}else{
-					MasterTail->LW = (struct Node *)newNode;
-					break;
+					//insert infront
+					newNode->next = temp->next;
+					newNode->prev = temp;
+					temp->next->prev = newNode;
+					temp->next = newNode;
+					inserted = 1;
 				}
+			}else{
+				//insert infront
+				newNode->next = temp->next;
+				newNode->prev = temp;
+				temp->next->prev = newNode;
+				temp->next = newNode;
+				inserted = 1;
 			}
-			temp->next = (struct Node *)newNode;
-			MasterTail->LW = (struct Node *)newNode; 
+		}
+		if(inserted == 0){
+			//insert at tail;
+			temp->next = newNode;
+			MasterTail->LE = newNode;
+			newNode->prev = temp;
+		}
+	}else if(priority == 'L' && direction == 'W'){
+		if(Master->LW == NULL){
+			Master->LW = newNode;
+			MasterTail->LW = newNode;
+			inserted = 1;
+		}
+		temp = Master->LW;	
+		while(temp->next != NULL && inserted == 0){
+			if(temp->next->Train->loadTime < newNode->Train->loadTime){
+				temp = temp->next;
+			}else if(temp->next->Train->loadTime == newNode->Train->loadTime){
+				if(temp->Train->trainid < newNode->Train->trainid){
+					temp = temp->next;
+				}else{
+					//insert infront
+					newNode->next = temp->next;
+					newNode->prev = temp;
+					temp->next->prev = newNode;
+					temp->next = newNode;
+					inserted = 1;
+				}
+			}else{
+				//insert infront
+				newNode->next = temp->next;
+				newNode->prev = temp;
+				temp->next->prev = newNode;
+				temp->next = newNode;
+				inserted = 1;
+			}
+		}
+		if(inserted == 0){
+			//insert at tail;
+			temp->next = newNode;
+			MasterTail->LW = newNode;
+			newNode->prev = temp;
 		}
 	}else{
 		printf("Train ERROR %i : p = %c , d = %c\n",Train->trainid,priority, direction);
@@ -230,6 +285,7 @@ void *CreateTrain(void *tempTrain){
 	}
 	pushTrain(Train);
 	pthread_mutex_unlock(&masterList);
+	//printList();
 	printf("Train %2d is ready to go %4s\n",Train->trainid,Train->directionName);
 	fflush(stdout);
 	Train->state = 'W';
@@ -246,24 +302,16 @@ void *CreateTrain(void *tempTrain){
 				}
 				popTrain(Train);
 				pthread_mutex_unlock(&masterList);
-			}//else{
-			//wait for move
-				//printf("Train %i is waiting for track to empty\n",Train->trainid);
-			//	pthread_cond_wait(&signalMove,&moveTrainsMutex);
-			//}
-
-		}/*else{
-			//wait for signal
-			//printf("Train %i is waiting\n",Train->trainid);
-			pthread_cond_wait(&signalMove,&moveTrainsMutex);
-		}*/
+			}
+		}
 
 	}
-	
+	//printList();
 	printf("Train %2d is ON the main track going %4s\n",Train->trainid,Train->directionName);
 	usleep(Train->crossTime*CONVERT);
 	pthread_cond_signal(&trainMoved);
 	Train->state = 'D';
+	//printList();
 	printf("Train %2d is OFF the main track after going %4s\n",Train->trainid,Train->directionName);
 	pthread_mutex_unlock(&mainTrack);
 	//pthread_barrier_wait(&endBarrier);
@@ -351,18 +399,7 @@ void WaitCompletion(struct train Trains[], int numTrains){
 	char lastDirection = 'E';
 	int i;
 	while ((i = countComplete(Trains,numTrains)) != numTrains){
-		//printf("COMPLETE =  %i\n",i);
-		//Do Nothing
-		//sleep(2);
-		/*for(i=0;i<numTrains;i++){
-			fprintf(stderr,"%c ",Trains[i].state);
-		}
-		fprintf(stderr,"\n");*/
 		pthread_cond_wait(&trainMoved,&trainMovedMutex);
-		//if(countComplete(Trains,numTrains) == numTrains){
-		//	break;
-		//}
-		//printList();
 		while (pthread_mutex_lock(&masterList) != 0){
 			//wait
 		}
