@@ -1,7 +1,21 @@
-3	e:1,5
-6	e:5,10
-1	W:7,6
-5	E:8,5
-0	W:13,5
-2	E:9,6
-4	e:6,2
+00:00:00.1 Train  3 is ready to go East
+00:00:00.1 Train  3 is ON the main track going East
+00:00:00.5 Train  6 is ready to go East
+00:00:00.6 Train  4 is ready to go East
+00:00:00.6 Train  3 is OFF the main track after going East
+00:00:00.6 Train  6 is ON the main track going East
+00:00:00.7 Train  1 is ready to go West
+00:00:00.8 Train  5 is ready to go East
+00:00:00.9 Train  2 is ready to go East
+00:00:01.3 Train  0 is ready to go West
+00:00:01.6 Train  6 is OFF the main track after going East
+00:00:01.6 Train  1 is ON the main track going West
+00:00:02.2 Train  1 is OFF the main track after going West
+00:00:02.2 Train  5 is ON the main track going East
+00:00:02.7 Train  5 is OFF the main track after going East
+00:00:02.7 Train  0 is ON the main track going West
+00:00:03.2 Train  0 is OFF the main track after going West
+00:00:03.2 Train  2 is ON the main track going East
+00:00:03.8 Train  2 is OFF the main track after going East
+00:00:03.8 Train  4 is ON the main track going East
+00:00:04.0 Train  4 is OFF the main track after going East
