@@ -6,7 +6,7 @@
 
 #define MAXLENGTH 200
 #define CONVERT 100000
-#define WAIT 100000
+#define WAIT 97500
 
 struct train{
 	char priority;
@@ -22,12 +22,8 @@ struct train{
 struct timespec start;
 
 
-void printList();
-
-
 /*************
-* Struct to hold Processes
-* Includes: 
+* Struct to hold Trains
 *************/
 struct Node{
 	struct Node *next;
@@ -35,7 +31,9 @@ struct Node{
 	struct train *Train;
 };
 
-
+/*************
+* List struct to hold Processes
+*************/
 struct List{
 	struct Node *head;
 	struct Node *tail;
@@ -43,14 +41,13 @@ struct List{
 
 /*************
 * Initialize 
-* 
 *************/
 struct List *HE;
 struct List *HW;
 struct List *LE;
 struct List *LW;
 
-struct List *Waiting;
+struct List *Done;
 
 pthread_mutex_t mainTrack;
 pthread_mutex_t moveTrainsMutex;
@@ -64,77 +61,26 @@ pthread_cond_t signalMove;
 int trainPushing;
 
 pthread_barrier_t startBarrier;
+pthread_barrier_t endBarrier;
 
+/**************************
+* Define Function Headers *
+***************************/
+void pushTrain(struct train *Train);
+void popTrain(struct train *Train);
+int countComplete(struct train Trains[],int numTrains);
+struct timespec diff(struct timespec end);
+void calculate_time(struct timespec current, long *msec, int *sec, int *min, int *hour);
+void *RunTrain(void *tempTrain);
+void setReadyTrain(struct train * Train);
+void scheduleTrains(struct train Trains[], int numTrains);
+void printList(struct List *list);
+void init(int numTrains);
+void emptyList(struct List *list);
+void cleanUp();
 
-void printList(){
-	struct Node * temp = HE->head;
-	fprintf(stderr,"------------------------------------------\n");
-	fprintf(stderr,"----------FORWARD-------------------------\n");
-	fprintf(stderr,"------------------------------------------\n");
-	fprintf(stderr,"HE: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->next;
-	}
-	fprintf(stderr,"\n");
-	temp = HW->head;
-	fprintf(stderr,"HW: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->next;
-	}
-	fprintf(stderr,"\n");
-	temp = LE->head;
-	fprintf(stderr,"LE: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->next;
-	}
-	fprintf(stderr,"\n");
-	temp = LW->head;
-	fprintf(stderr,"LW: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->next;
-	}
-	fprintf(stderr,"\n");
-	fprintf(stderr,"------------------------------------------\n");
-	
-	temp = HE->tail;
-	fprintf(stderr,"------------------------------------------\n");
-	fprintf(stderr,"----------BACKWARD------------------------\n");
-	fprintf(stderr,"------------------------------------------\n");
-	fprintf(stderr,"HE: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->prev;
-	}
-	fprintf(stderr,"\n");
-	temp = HW->tail;
-	fprintf(stderr,"HW: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->prev;
-	}
-	fprintf(stderr,"\n");
-	temp = LE->tail;
-	fprintf(stderr,"LE: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->prev;
-	}
-	fprintf(stderr,"\n");
-	temp = LW->tail;
-	fprintf(stderr,"LW: ");
-	while(temp != NULL){
-		fprintf(stderr," (Train: %i, State: %c) ",temp->Train->trainid,temp->Train->state);
-		temp = (struct Node *)temp->prev;
-	}
-	fprintf(stderr,"\n");
-	fprintf(stderr,"------------------------------------------\n");
-}
-
-
+/*pushTrain
+Creates a Node and pushes it onto the proper list*/
 void pushTrain(struct train *Train){
 	char priority = Train->priority;
 	char direction = Train->direction;
@@ -154,7 +100,7 @@ void pushTrain(struct train *Train){
 	}else if(priority == 'L' && direction == 'W'){
 		list = LW;
 	}
-
+	//if node at head
 	if(list->head == NULL){
 		list->head = newNode;
 		list->tail = newNode;
@@ -215,66 +161,17 @@ void pushTrain(struct train *Train){
 			}
 		}
 	}
-
-	/*
-	if(priority == 'H' && direction == 'E'){
-		temp = HE->head;
-		tail = HE->tail;
-	}else if(priority == 'H' && direction == 'W'){
-		temp = HW->head;
-		tail = HE->tail;
-	}else if(priority == 'L' && direction == 'E'){
-		temp = LE->head;
-		tail = HE->tail;
-	}else if(priority == 'L' && direction == 'W'){
-		temp = LW->head;
-		tail = HE->tail;
-	}
-	if(temp == NULL){
-		insertHead(priority,direction,newNode);
-		inserted = 1;
-	}else{
-		while(temp != NULL && temp->next != NULL && inserted == 0){
-			if(temp->next->Train->loadTime < newNode->Train->loadTime){
-				temp = temp->next;
-			}else if(temp->next->Train->loadTime == newNode->Train->loadTime){
-				if(temp->Train->trainid < newNode->Train->trainid){
-					temp = temp->next;
-				}else{
-					//insert infront
-					newNode->next = temp->next;
-					newNode->prev = temp;
-					temp->next->prev = newNode;
-					temp->next = newNode;
-					inserted = 1;
-				}
-			}else{
-				//insert infront
-				newNode->next = temp->next;
-				newNode->prev = temp;
-				temp->next->prev = newNode;
-				temp->next = newNode;
-				inserted = 1;
-			}
-		}	
-	}
-	if(inserted == 0){
-		//insert at tail
-		temp->next = newNode;
-		tail = newNode;
-		newNode->prev = temp;
-	}*/
 }
 
+/*popTrain
+pops the head of the list with the same priority as the train*/
 void popTrain(struct train *Train){
 	char priority = Train->priority;
 	char direction = Train->direction;
 	struct Node * tofree = NULL;
-	struct Node * head = NULL;
-	struct Node * tail = NULL;
-
 	struct List * list = NULL;
 
+	//set head of list according to priority and direction
 	if(priority == 'H' && direction == 'E'){
 		list = HE;
 	}else if(priority == 'H' && direction == 'W'){
@@ -285,6 +182,7 @@ void popTrain(struct train *Train){
 		list = LW;
 	}
 
+	//pop the head of the list off
 	if(list->head->next == NULL){
 		tofree = list->head;
 		list->head = NULL;
@@ -296,42 +194,20 @@ void popTrain(struct train *Train){
 	if(tofree->Train->trainid != Train->trainid){
 		printf("ERROR\n");
 	}
-/*	if(priority == 'H' && direction == 'E'){
-		tofree = HE->head;
-		if(HE->head->next == NULL){
-			HE->head = NULL;
-			HE->tail = NULL;
-		}else{
-			HE->head = HE->head->next;
-		}
-	}else if(priority == 'H' && direction == 'W'){
-		tofree = HW->head;
-		if(HW->head->next == NULL){
-			HW->head = NULL;
-			HW->tail = NULL;
-		}else{
-			HW->head = HW->head->next;
-		}
-	}else if(priority == 'L' && direction == 'E'){
-		tofree = LE->head;
-		if(LE->head->next == NULL){
-			LE->head = NULL;
-			LE->tail = NULL;
-		}else{
-			LE->head = LE->head->next;
-		}
-	}else if(priority == 'L' && direction == 'W'){
-		tofree = LW->head;
-		if(LW->head->next == NULL){
-			LW->head = NULL;
-			LW->tail = NULL;
-		}else{
-			LW->head = LW->head->next;
-		}
-	}*/
+
+	//put on finished list to print out later if debugging
+	if(Done->tail == NULL){
+		Done->head = tofree;
+		Done->tail = tofree;
+	}else{
+		Done->tail->next = tofree;
+		tofree->prev = Done->tail;
+		Done->tail = tofree;
+	}
 }
 
-
+/*countComplete
+Counts number of complete trains to compare with numTrains*/
 int countComplete(struct train Trains[],int numTrains){
 	int complete = 0;
 	int i;
@@ -343,7 +219,7 @@ int countComplete(struct train Trains[],int numTrains){
 	return complete;
 }
 
-
+/*function for determining the elapsed time*/
 struct timespec diff(struct timespec end){
 	struct timespec temp;
 	if ((end.tv_nsec-start.tv_nsec)<0) {
@@ -356,7 +232,7 @@ struct timespec diff(struct timespec end){
 	return temp;
 }
 
-/**/
+/*function to calculate the elapsed time*/
 void calculate_time(struct timespec current, long *msec, int *sec, int *min, int *hour){
     struct timespec time_diff;
     time_diff = diff(current); 
@@ -366,7 +242,8 @@ void calculate_time(struct timespec current, long *msec, int *sec, int *min, int
     *msec = time_diff.tv_nsec/100000000;
 }
 
-void *CreateTrain(void *tempTrain){
+/*main train thread program*/
+void *RunTrain(void *tempTrain){
 	struct timespec ts_current;
     long msec;
     int sec;
@@ -391,17 +268,20 @@ void *CreateTrain(void *tempTrain){
 	pthread_mutex_unlock(&masterList);
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-    printf("%02d:%02d:%02d.%1ld Train %2d is ready to go %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+    //printf("%02d:%02d:%02d.%1ld Train %2d is ready to go %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
 	fflush(stdout);
 	Train->state = 'W';
 	int lock;
 	pthread_cond_signal(&trainMoved);
+	while (pthread_mutex_lock(&pushLock) != 0){
+		//wait
+	}
 	trainPushing--;
+	pthread_mutex_unlock(&pushLock);
 	while(Train->state == 'W' || Train->state == 'R'){
 		if(Train->state == 'R'){
 			//try lock
 			lock = pthread_mutex_trylock(&mainTrack);
-			//printf("Train %i is in state R %i\n",Train->trainid,lock);
 			if(lock == 0){
 				Train->state = 'C';
 				while (pthread_mutex_lock(&masterList) != 0){
@@ -415,18 +295,21 @@ void *CreateTrain(void *tempTrain){
 	}
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-	printf("%02d:%02d:%02d.%1ld Train %2d is ON the main track going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+	//printf("%02d:%02d:%02d.%1ld Train %2d is ON the main track going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
 	usleep(Train->crossTime*CONVERT);
 	pthread_cond_signal(&trainMoved);
 	Train->state = 'D';
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-	printf("%02d:%02d:%02d.%1ld Train %2d is OFF the main track after going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+	//printf("%02d:%02d:%02d.%1ld Train %2d is OFF the main track after going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
 	pthread_mutex_unlock(&mainTrack);
-	//pthread_cond_signal(&trainMoved);
+	pthread_barrier_wait(&endBarrier);
+	usleep(WAIT);
+	pthread_cond_signal(&trainMoved);
 	pthread_exit(NULL);
 }
 
+/*checks to make sure the right train is waiting to go*/
 void setReadyTrain(struct train * Train){
 	if(HE->head != NULL){
 		if(HE->head->Train->trainid == Train->trainid)
@@ -454,6 +337,7 @@ void setReadyTrain(struct train * Train){
 	}
 }
 
+/*dispatcher thread*/
 void scheduleTrains(struct train Trains[], int numTrains){
 	struct train * waitingTrain = NULL;
 	struct train * selectedTrain = NULL;
@@ -461,15 +345,14 @@ void scheduleTrains(struct train Trains[], int numTrains){
 	int i;
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	while ((i = countComplete(Trains,numTrains)) != numTrains){
-
 		pthread_cond_wait(&trainMoved,&trainMovedMutex);
+		usleep(WAIT);
 		while(trainPushing > 0){
-			//printf("Train Pushing = %i\n",trainPushing);
+			//wait
 		}
 		while (pthread_mutex_lock(&masterList) != 0){
 			//wait
 		}
-		//printList();
 		if(waitingTrain != NULL){
 			if(waitingTrain->state == 'C' || waitingTrain->state == 'D'){
 				lastDirection = waitingTrain->direction;
@@ -567,35 +450,33 @@ void scheduleTrains(struct train Trains[], int numTrains){
 	}
 }
 
-int main(int argc, char *argv[]){
-	int i;
-	trainPushing = 0;
-	void *Status;
-	if(argc != 3){
-		printf("Two Arguments Required: use - (File Path} {Number Of Trains}");
-		return (1);
+/*prints a list from head to tail*/
+void printList(struct List *list){
+	struct Node *temp = list->head;
+	while(temp != NULL){
+		printf("%i ",temp->Train->trainid);
+		temp = temp->next;
 	}
-	
-	FILE *fp = fopen(argv[1], "r");
-	if(fp == 0){
-		printf("Could not open file\n");
-		return (1);
-	}
-	int numTrains = atoi(argv[2]);
+	printf("\n");
+}
 
-	struct train Trains[numTrains];
-	pthread_t pthreads[numTrains];
+/*init components for program*/
+void init(int numTrains){
+	//init global variables
+	trainPushing = 0;
 
 	// init lists
 	HE = malloc(sizeof(struct List));
 	HW = malloc(sizeof(struct List));
 	LE = malloc(sizeof(struct List));
 	LW = malloc(sizeof(struct List));
+	Done = malloc(sizeof(struct List));
 
 	//init information mutexes
 	pthread_mutex_init(&mainTrack, NULL);
 	pthread_mutex_init(&masterList, NULL);
 	pthread_mutex_init(&pushLock, NULL);
+	
 	//init 	condition mutexes
 	pthread_mutex_init(&moveTrainsMutex, NULL);
 	pthread_mutex_init(&trainMovedMutex, NULL);
@@ -606,10 +487,83 @@ int main(int argc, char *argv[]){
 
 	//init barrier
 	pthread_barrier_init(&startBarrier, NULL, numTrains);
-
+	pthread_barrier_init(&endBarrier, NULL, numTrains);
 	//init condition
 	pthread_cond_init(&trainMoved,NULL);
 	pthread_cond_init(&signalMove,NULL);
+
+
+
+}
+
+/*empties a list if any elements in it*/
+void emptyList(struct List *list){
+	struct Node *temp = list->tail;
+	while(temp !=NULL){
+		if(temp->prev != NULL){
+			temp = temp->prev;
+			free(temp->next);
+		}else{
+			break;
+		}
+	}
+	if(list->head != NULL){
+		free(list->head);
+	}
+}
+
+/*free and destroy all malloc data*/
+void cleanUp(){
+	//Free Done List
+	emptyList(Done);
+	
+	//free lists
+	free(HE);
+	free(HW);
+	free(LE);
+	free(LW);
+	free(Done);
+
+	//destroy information mutexes
+	pthread_mutex_destroy(&mainTrack);
+	pthread_mutex_destroy(&masterList);
+	pthread_mutex_destroy(&pushLock);
+	
+	//destroy condition mutexes
+	pthread_mutex_destroy(&moveTrainsMutex);
+	pthread_mutex_destroy(&trainMovedMutex);
+
+	//destory barrier
+	pthread_barrier_destroy(&startBarrier);
+
+	//destroy condition
+	pthread_cond_destroy(&trainMoved);
+	pthread_cond_destroy(&signalMove);
+
+
+}
+
+
+/*start up and creation of threads*/
+int main(int argc, char *argv[]){
+	int i;
+	void *Status;
+	if(argc != 3){
+		printf("Two Arguments Required: use - (File Path} {Number Of Trains}");
+		return (1);
+	}
+
+	FILE *fp = fopen(argv[1], "r");
+	if(fp == 0){
+		printf("Could not open file\n");
+		return (1);
+	}
+	int numTrains = atoi(argv[2]);
+
+	init(numTrains);
+
+	struct train Trains[numTrains];
+	pthread_t pthreads[numTrains];
 
 	//Create All Trains
 	for(i=0;i<numTrains;i++){
@@ -621,7 +575,7 @@ int main(int argc, char *argv[]){
 		fscanf(fp,"%c:%i,%i\n", &fileDirection,&fileLoadTime,&fileCrossTime);
 		if (fileDirection == 'A' || fileLoadTime == -1 || fileCrossTime == -1){
 			printf("Number of trains is too high\n");
-			exit(1);
+			exit(-1);
 		}
 		if(fileDirection == 'w' || fileDirection == 'e'){
 			filePriority = 'L';
@@ -635,7 +589,7 @@ int main(int argc, char *argv[]){
 		}
 		if(fileDirection != 'W' && fileDirection != 'E'){
 			printf("Direction of train is not E or W\n");
-			exit(1);
+			exit(-1);
 		}
 		Trains[i].priority = filePriority;
 		Trains[i].direction = fileDirection;
@@ -649,20 +603,24 @@ int main(int argc, char *argv[]){
 		Trains[i].trainid = i;
 		Trains[i].state = 'N';
 		
-		int rc = pthread_create(&pthreads[i], NULL, CreateTrain, (void *)current);
+		int rc = pthread_create(&pthreads[i], NULL, RunTrain, (void *)current);
 		if (rc){
         		printf("ERROR; return code from pthread_create() is %d\n", (int)rc);
         		exit(-1);
     		}
 	}
 	
+	fclose(fp);
+
 	scheduleTrains(Trains,numTrains);
+
 	for(i=0;i<numTrains;i++){
 		pthread_join(pthreads[i],&Status);
 	}
-	pthread_mutex_destroy(&mainTrack);
-	pthread_barrier_destroy(&startBarrier);
 
-//	free(Master);
+	printList(Done);
+
+	cleanUp();
+
 	return (0);
 }
