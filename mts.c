@@ -17,6 +17,8 @@ struct train{
 	int loadTime;
 	int crossTime;
 	int trainid;
+	pthread_cond_t waitingDispatch;
+	pthread_mutex_t trainMutex;
 };
 
 struct timespec start;
@@ -56,7 +58,6 @@ pthread_mutex_t masterList;
 pthread_mutex_t pushLock;
 
 pthread_cond_t trainMoved;
-pthread_cond_t signalMove;
 
 int trainPushing;
 
@@ -242,6 +243,17 @@ void calculate_time(struct timespec current, long *msec, int *sec, int *min, int
     *msec = time_diff.tv_nsec/100000000;
 }
 
+/*function to calculate the elapsed time in msec*/
+void calculate_time_msec(struct timespec current, long *msec){
+    struct timespec time_diff;
+    time_diff = diff(current); 
+    int sec, min, hour;
+    sec = (int)time_diff.tv_sec % 60;
+    min = ((int)time_diff.tv_sec / 60) % 60;
+    hour = ((int)time_diff.tv_sec / 3600) % 24;
+    *msec = (10*sec)+(time_diff.tv_nsec/100000000);
+}
+
 /*main train thread program*/
 void *RunTrain(void *tempTrain){
 	struct timespec ts_current;
@@ -268,7 +280,7 @@ void *RunTrain(void *tempTrain){
 	pthread_mutex_unlock(&masterList);
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-    //printf("%02d:%02d:%02d.%1ld Train %2d is ready to go %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+    printf("%02d.%ld Train %2d is ready to go %4s\n", sec, msec ,Train->trainid,Train->directionName);
 	fflush(stdout);
 	Train->state = 'W';
 	int lock;
@@ -279,6 +291,7 @@ void *RunTrain(void *tempTrain){
 	trainPushing--;
 	pthread_mutex_unlock(&pushLock);
 	while(Train->state == 'W' || Train->state == 'R'){
+		pthread_cond_wait(&(Train->waitingDispatch),&(Train->trainMutex));
 		if(Train->state == 'R'){
 			//try lock
 			lock = pthread_mutex_trylock(&mainTrack);
@@ -295,14 +308,14 @@ void *RunTrain(void *tempTrain){
 	}
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-	//printf("%02d:%02d:%02d.%1ld Train %2d is ON the main track going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+	printf("%02d.%ld Train %2d is ON the main track going %4s\n", sec, msec ,Train->trainid,Train->directionName);
 	usleep(Train->crossTime*CONVERT);
-	pthread_cond_signal(&trainMoved);
 	Train->state = 'D';
 	clock_gettime(CLOCK_MONOTONIC, &ts_current);
     calculate_time(ts_current, &msec, &sec, &min, &hour);
-	//printf("%02d:%02d:%02d.%1ld Train %2d is OFF the main track after going %4s\n", hour, min, sec, msec ,Train->trainid,Train->directionName);
+	printf("%02d.%ld Train %2d is OFF the main track after going %4s\n", sec, msec ,Train->trainid,Train->directionName);
 	pthread_mutex_unlock(&mainTrack);
+	pthread_cond_signal(&trainMoved);
 	pthread_barrier_wait(&endBarrier);
 	usleep(WAIT);
 	pthread_cond_signal(&trainMoved);
@@ -310,7 +323,7 @@ void *RunTrain(void *tempTrain){
 }
 
 /*checks to make sure the right train is waiting to go*/
-void setReadyTrain(struct train * Train){
+void setReadyTrain(struct train *Train){
 	if(HE->head != NULL){
 		if(HE->head->Train->trainid == Train->trainid)
 			HE->head->Train->state = 'R';
@@ -337,17 +350,38 @@ void setReadyTrain(struct train * Train){
 	}
 }
 
+int trainsLoading(long msec,struct train Trains[], int numTrains){
+	int timePassed = (int)msec;
+	int i;
+	int passed = 1;
+	for(i=0;i<numTrains;i++){
+		//fprintf(stderr,"%c %d",Trains[i].state,Trains[i].loadTime);
+		if(Trains[i].loadTime <= timePassed && (Trains[i].state == 'P' || Trains[i].state == 'L')){
+			passed = 0;
+		}
+	}
+	//fprintf(stderr,"        %i",timePassed);
+	//fprintf(stderr,"\n");
+	return passed;
+}
+
 /*dispatcher thread*/
 void scheduleTrains(struct train Trains[], int numTrains){
 	struct train * waitingTrain = NULL;
 	struct train * selectedTrain = NULL;
+	struct timespec ts_current;
 	char lastDirection = 'E';
-	int i;
-	clock_gettime(CLOCK_MONOTONIC, &start);
+    long msec;
+    int i;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
 	while ((i = countComplete(Trains,numTrains)) != numTrains){
 		pthread_cond_wait(&trainMoved,&trainMovedMutex);
-		usleep(WAIT);
-		while(trainPushing > 0){
+
+		clock_gettime(CLOCK_MONOTONIC, &ts_current);
+		calculate_time_msec(ts_current, &msec);
+
+		while(trainsLoading(msec,Trains,numTrains) == 0){
 			//wait
 		}
 		while (pthread_mutex_lock(&masterList) != 0){
@@ -441,12 +475,17 @@ void scheduleTrains(struct train Trains[], int numTrains){
 		}
 		if(selectedTrain != NULL){
 			setReadyTrain(selectedTrain);
+			if(selectedTrain!= NULL)
+				pthread_cond_signal(&(selectedTrain->waitingDispatch));
+			if(waitingTrain!= NULL)
+				pthread_cond_signal(&(waitingTrain->waitingDispatch));
 			waitingTrain = selectedTrain;
 			selectedTrain = NULL;
 			
 		}
+		if(waitingTrain!= NULL)
+				pthread_cond_signal(&(waitingTrain->waitingDispatch));
 		pthread_mutex_unlock(&masterList);
-		pthread_cond_broadcast(&signalMove);
 	}
 }
 
@@ -490,7 +529,6 @@ void init(int numTrains){
 	pthread_barrier_init(&endBarrier, NULL, numTrains);
 	//init condition
 	pthread_cond_init(&trainMoved,NULL);
-	pthread_cond_init(&signalMove,NULL);
 
 
 
@@ -538,8 +576,6 @@ void cleanUp(){
 
 	//destroy condition
 	pthread_cond_destroy(&trainMoved);
-	pthread_cond_destroy(&signalMove);
-
 
 }
 
@@ -602,6 +638,9 @@ int main(int argc, char *argv[]){
 		Trains[i].crossTime = fileCrossTime;
 		Trains[i].trainid = i;
 		Trains[i].state = 'N';
+		pthread_cond_init(&(Trains[i].waitingDispatch),NULL);
+		pthread_mutex_init(&(Trains[i].trainMutex),NULL);
+		pthread_mutex_lock(&(Trains[i].trainMutex));
 		
 		int rc = pthread_create(&pthreads[i], NULL, RunTrain, (void *)current);
 		if (rc){
@@ -618,7 +657,7 @@ int main(int argc, char *argv[]){
 		pthread_join(pthreads[i],&Status);
 	}
 
-	printList(Done);
+	//printList(Done);
 
 	cleanUp();
 
